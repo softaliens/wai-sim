@@ -1,8 +1,7 @@
 {-# LANGUAGE CPP #-}
-
-module Network.Wai.Handler.Warp.Windows (
-    windowsThreadBlockHack,
-) where
+module Network.Wai.Handler.Warp.Windows
+  ( windowsThreadBlockHack
+  ) where
 
 #if WINDOWS
 import Control.Concurrent.MVar

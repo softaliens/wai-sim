@@ -1,10 +1,10 @@
-module Network.Wai.Middleware.AcceptOverride (
-    -- $howto
-    acceptOverride,
-) where
+module Network.Wai.Middleware.AcceptOverride
+    ( -- $howto
+      acceptOverride
+    ) where
 
-import Control.Monad (join)
 import Network.Wai
+import Control.Monad (join)
 
 import Network.Wai.Header (replaceHeader)
 
@@ -31,7 +31,6 @@ acceptOverride app req =
     req' =
         case join $ lookup "_accept" $ queryString req of
             Nothing -> req
-            Just a ->
-                req
-                    { requestHeaders = replaceHeader "Accept" a $ requestHeaders req
-                    }
+            Just a -> req {
+                requestHeaders = replaceHeader "Accept" a $ requestHeaders req
+              }

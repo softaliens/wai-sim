@@ -1,15 +1,12 @@
 {-# LANGUAGE CPP #-}
-
 -----------------------------------------------------------------
-
------------------------------------------------------------------
-
 -- | Module : Network.Wai.Middleware.MethodOverridePost
 --
 -- Changes the request-method via first post-parameter _method.
-module Network.Wai.Middleware.MethodOverridePost (
-    methodOverridePost,
-) where
+-----------------------------------------------------------------
+module Network.Wai.Middleware.MethodOverridePost
+  ( methodOverridePost
+  ) where
 
 import Data.ByteString.Lazy (toChunks)
 import Data.IORef (atomicModifyIORef, newIORef)
@@ -29,20 +26,18 @@ import Network.Wai
 -- parameter.
 --
 -- * This middleware only applies when the initial request method is POST.
+--
 methodOverridePost :: Middleware
 methodOverridePost app req send =
     case (requestMethod req, lookup hContentType (requestHeaders req)) of
-        ("POST", Just "application/x-www-form-urlencoded") -> setPost req >>= flip app send
-        _ -> app req send
+      ("POST", Just "application/x-www-form-urlencoded") -> setPost req >>= flip app send
+      _                                                  -> app req send
 
 setPost :: Request -> IO Request
 setPost req = do
-    body <- (mconcat . toChunks) `fmap` lazyRequestBody req
-    ref <- newIORef body
-    let rb = atomicModifyIORef ref $ \bs -> (mempty, bs)
-        req' = setRequestBodyChunks rb req
-    case parseQuery body of
-        (("_method", Just newmethod) : _) -> return req'{requestMethod = newmethod}
-        _ -> return req'
-
-{- HLint ignore setPost "Use tuple-section" -}
+  body <- (mconcat . toChunks) `fmap` lazyRequestBody req
+  ref <- newIORef body
+  let rb = atomicModifyIORef ref $ \bs -> (mempty, bs)
+  case parseQuery body of
+    (("_method", Just newmethod):_) -> return $ req {requestBody = rb, requestMethod = newmethod}
+    _                               -> return $ req {requestBody = rb}

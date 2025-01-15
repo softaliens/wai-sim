@@ -1,7 +1,4 @@
 ---------------------------------------------------------
-
----------------------------------------------------------
-
 -- |
 -- Module        : Network.Wai.Middleware.HealthCheckEndpoint
 -- Copyright     : Michael Snoyman
@@ -12,10 +9,12 @@
 -- Portability   : portable
 --
 -- Add empty endpoint (for Health check tests)
-module Network.Wai.Middleware.HealthCheckEndpoint (
-    healthCheck,
+--
+---------------------------------------------------------
+module Network.Wai.Middleware.HealthCheckEndpoint
+  ( healthCheck,
     voidEndpoint,
-)
+  )
 where
 
 import Data.ByteString (ByteString)
@@ -33,6 +32,6 @@ healthCheck = voidEndpoint "/_healthz"
 -- @since 3.1.9
 voidEndpoint :: ByteString -> Middleware
 voidEndpoint endpointPath router request respond =
-    if rawPathInfo request == endpointPath
-        then respond $ responseLBS status200 mempty "-"
-        else router request respond
+  if rawPathInfo request == endpointPath
+    then respond $ responseLBS status200 mempty "-"
+    else router request respond

@@ -1,10 +1,9 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
-
-module Network.Wai.Handler.SCGI (
-    run,
-    runSendfile,
-) where
+module Network.Wai.Handler.SCGI
+    ( run
+    , runSendfile
+    ) where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as S
@@ -12,7 +11,6 @@ import qualified Data.ByteString.Char8 as S8
 import Data.ByteString.Lazy.Internal (defaultChunkSize)
 import qualified Data.ByteString.Unsafe as S
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
-import Data.Maybe (fromMaybe, listToMaybe)
 import Foreign.C (CChar, CInt (..))
 import Foreign.Marshal.Alloc (free, mallocBytes)
 import Foreign.Ptr (Ptr, castPtr, nullPtr)
@@ -29,19 +27,13 @@ runOne :: Maybe ByteString -> Application -> IO ()
 runOne sf app = do
     socket <- c'accept 0 nullPtr nullPtr
     headersBS <- readNetstring socket
-    let headers = parseHeaders $ S.split 0 headersBS
-    let conLen =
-            fromMaybe 0 $ do
-                (_, conLenS) <- listToMaybe headers
-                (i, _) <- listToMaybe $ reads conLenS
-                pure i
+    let headers@((_, conLenS):_) = parseHeaders $ S.split 0 headersBS
+    let conLen = case reads conLenS of
+                    (i, _):_ -> i
+                    [] -> 0
     conLenI <- newIORef conLen
-    runGeneric
-        headers
-        (requestBodyFunc $ input socket conLenI)
-        (write socket)
-        sf
-        app
+    runGeneric headers (requestBodyFunc $ input socket conLenI)
+              (write socket) sf app
     drain socket conLenI
     _ <- c'close socket
     return ()
@@ -57,9 +49,8 @@ input socket ilen rlen = do
     case len of
         0 -> return Nothing
         _ -> do
-            bs <-
-                readByteString socket $
-                    minimum [defaultChunkSize, len, rlen]
+            bs <- readByteString socket
+                $ minimum [defaultChunkSize, len, rlen]
             writeIORef ilen $ len - S.length bs
             return $ Just bs
 
@@ -70,7 +61,7 @@ drain socket ilen = do
     return ()
 
 parseHeaders :: [S.ByteString] -> [(String, String)]
-parseHeaders (x : y : z) = (S8.unpack x, S8.unpack y) : parseHeaders z
+parseHeaders (x:y:z) = (S8.unpack x, S8.unpack y) : parseHeaders z
 parseHeaders _ = []
 
 readNetstring :: CInt -> IO S.ByteString
@@ -82,10 +73,10 @@ readNetstring socket = do
   where
     readLen l = do
         bs <- readByteString socket 1
-        case S8.unpack bs of
-            [':'] -> return l
-            [c] -> readLen $ l * 10 + (fromEnum c - fromEnum '0')
-            _ -> error "Network.Wai.Handler.SCGI.readNetstring: should never happen"
+        let [c] = S8.unpack bs
+        if c == ':'
+            then return l
+            else readLen $ l * 10 + (fromEnum c - fromEnum '0')
 
 readByteString :: CInt -> Int -> IO S.ByteString
 readByteString socket len = do

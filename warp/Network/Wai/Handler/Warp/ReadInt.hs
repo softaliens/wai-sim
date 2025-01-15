@@ -1,22 +1,19 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE BangPatterns #-}
 
 -- Copyright     : Erik de Castro Lopo <erikd@mega-nerd.com>
 -- License       : BSD3
 
 module Network.Wai.Handler.Warp.ReadInt (
-    readInt,
-    readInt64,
-) where
+    readInt
+  , readInt64
+  ) where
 
 import qualified Data.ByteString as S
-import Data.Word8 (isDigit, _0)
 
 import Network.Wai.Handler.Warp.Imports hiding (readInt)
 
 {-# INLINE readInt #-}
-
--- | Will 'takeWhile isDigit' and return the parsed 'Integral'.
 readInt :: Integral a => ByteString -> a
 readInt bs = fromIntegral $ readInt64 bs
 
@@ -30,6 +27,8 @@ readInt bs = fromIntegral $ readInt64 bs
 
 {-# NOINLINE readInt64 #-}
 readInt64 :: ByteString -> Int64
-readInt64 bs =
-    S.foldl' (\ !i !c -> i * 10 + fromIntegral (c - _0)) 0 $
-        S.takeWhile isDigit bs
+readInt64 bs = S.foldl' (\ !i !c -> i * 10 + fromIntegral (c - 48)) 0
+             $ S.takeWhile isDigit bs
+
+isDigit :: Word8 -> Bool
+isDigit w = w >= 48 && w <= 57

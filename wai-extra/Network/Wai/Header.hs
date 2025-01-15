@@ -1,9 +1,9 @@
 -- | Some helpers for dealing with WAI 'Header's.
-module Network.Wai.Header (
-    contentLength,
-    parseQValueList,
-    replaceHeader,
-) where
+module Network.Wai.Header
+    ( contentLength
+    , parseQValueList
+    , replaceHeader
+    ) where
 
 import Control.Monad (guard)
 import qualified Data.ByteString as S
@@ -22,8 +22,8 @@ contentLength hdrs = lookup H.hContentLength hdrs >>= readInt
 readInt :: S8.ByteString -> Maybe Integer
 readInt bs =
     case S8.readInteger bs of
-        -- 'S.all' is also 'True' for an empty string
-        Just (i, rest) | S.all (== _space) rest -> Just i
+        -- 'S8.all' is also 'True' for an empty string
+        Just (i, rest) | S8.all (== ' ') rest -> Just i
         _ -> Nothing
 
 replaceHeader :: H.HeaderName -> S.ByteString -> [H.Header] -> [H.Header]
@@ -49,9 +49,7 @@ parseQValueList = fmap go . splitCommas
     checkQ (val, bs) =
         -- RFC 7231 says optional whitespace can be around the semicolon.
         -- So drop any before it       ,           . and any behind it       $ and drop the semicolon
-        ( dropWhileEnd (== _space) val
-        , parseQval . S.dropWhile (== _space) $ S.drop 1 bs
-        )
+        (dropWhileEnd (== _space) val, parseQval . S.dropWhile (== _space) $ S.drop 1 bs)
       where
         parseQval qVal = do
             q <- S.stripPrefix "q=" qVal

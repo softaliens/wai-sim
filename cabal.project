@@ -6,7 +6,6 @@ packages:
     wai-extra
     warp
     warp-tls
-    warp-quic
     wai-app-static
     wai-websockets
     wai-conduit

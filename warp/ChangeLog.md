@@ -1,32 +1,8 @@
 # ChangeLog for warp
 
-## 3.4.1
-
-* Using time-manager v0.1.0, and auto-update v0.2.0.
-  [#986](https://github.com/yesodweb/wai/pull/986)
-
-## 3.4.0
-
-* Reworked request lines (`CRLF`) parsing: [#968](https://github.com/yesodweb/wai/pulls)
-    * We do not accept multiline headers anymore.
-      ([`RFC 7230`](https://www.rfc-editor.org/rfc/rfc7230#section-3.2.4) deprecated it 10 years ago)
-    * Reworked request lines (`CRLF`) parsing to not unnecessarily copy bytestrings.
-* Using http2 v5.1.0.
-* `fourmolu` is used as an official formatter.
-
-## 3.3.31
-
-* Supporting http2 v5.0.
-
 ## 3.3.30
 
-* Length of `ResponseBuilder` responses will now also be passed to the logger.
-   [#946](https://github.com/yesodweb/wai/pull/946)
-* Using `If-(None-)Match` headers simultaneously with `If-(Un)Modified-Since` headers now
-  follow the RFC 9110 standard. So `If-(Un)Modified-Since` headers will be correctly ignored
-  if their respective `-Match` counterpart is also present in the request headers.
-   [#945](https://github.com/yesodweb/wai/pull/945)
-* Fixed adding superfluous `Server` header when using HTTP/2.0 if response already has it.
+* Fixed adding superfluous `Server` header if response already has it.
    [#943](https://github.com/yesodweb/wai/pull/943)
 
 ## 3.3.29

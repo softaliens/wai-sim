@@ -1,39 +1,34 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE BangPatterns #-}
 
 module System.TimeManager (
-    -- ** Types
-    Manager,
-    TimeoutAction,
-    Handle,
-
-    -- ** Manager
-    initialize,
-    stopManager,
-    killManager,
-    withManager,
-    withManager',
-
-    -- ** Registration
-    register,
-    registerKillThread,
-
-    -- ** Control
-    tickle,
-    cancel,
-    pause,
-    resume,
-
-    -- ** Exceptions
-    TimeoutThread (..),
-) where
+  -- ** Types
+    Manager
+  , TimeoutAction
+  , Handle
+  -- ** Manager
+  , initialize
+  , stopManager
+  , killManager
+  , withManager
+  , withManager'
+  -- ** Registration
+  , register
+  , registerKillThread
+  -- ** Control
+  , tickle
+  , cancel
+  , pause
+  , resume
+  -- ** Exceptions
+  , TimeoutThread (..)
+  ) where
 
 import Control.Concurrent (myThreadId)
+import qualified UnliftIO.Exception as E
 import Control.Reaper
+import Data.Typeable (Typeable)
 import Data.IORef (IORef)
 import qualified Data.IORef as I
-import Data.Typeable (Typeable)
-import qualified UnliftIO.Exception as E
 
 ----------------------------------------------------------------
 
@@ -44,33 +39,32 @@ type Manager = Reaper [Handle] Handle
 type TimeoutAction = IO ()
 
 -- | A handle used by 'Manager'
-data Handle = Handle Manager !(IORef TimeoutAction) !(IORef State)
+data Handle = Handle !(IORef TimeoutAction) !(IORef State)
 
-data State
-    = Active -- Manager turns it to Inactive.
-    | Inactive -- Manager removes it with timeout action.
-    | Paused -- Manager does not change it.
+data State = Active    -- Manager turns it to Inactive.
+           | Inactive  -- Manager removes it with timeout action.
+           | Paused    -- Manager does not change it.
+           | Canceled  -- Manager removes it without timeout action.
 
 ----------------------------------------------------------------
 
 -- | Creating timeout manager which works every N micro seconds
 --   where N is the first argument.
 initialize :: Int -> IO Manager
-initialize timeout =
-    mkReaper
-        defaultReaperSettings
-            { reaperAction = mkListAction prune
-            , reaperDelay = timeout
-            }
+initialize timeout = mkReaper defaultReaperSettings
+        { reaperAction = mkListAction prune
+        , reaperDelay = timeout
+        }
   where
-    prune m@(Handle _ actionRef stateRef) = do
+    prune m@(Handle actionRef stateRef) = do
         state <- I.atomicModifyIORef' stateRef (\x -> (inactivate x, x))
         case state of
             Inactive -> do
                 onTimeout <- I.readIORef actionRef
                 onTimeout `E.catch` ignoreAll
                 return Nothing
-            _ -> return $ Just m
+            Canceled -> return Nothing
+            _        -> return $ Just m
 
     inactivate Active = Inactive
     inactivate x = x
@@ -81,7 +75,7 @@ initialize timeout =
 stopManager :: Manager -> IO ()
 stopManager mgr = E.mask_ (reaperStop mgr >>= mapM_ fire)
   where
-    fire (Handle _ actionRef _) = do
+    fire (Handle actionRef _) = do
         onTimeout <- I.readIORef actionRef
         onTimeout `E.catch` ignoreAll
 
@@ -96,10 +90,10 @@ killManager = reaperKill
 
 -- | Registering a timeout action.
 register :: Manager -> TimeoutAction -> IO Handle
-register mgr !onTimeout = do
+register mgr onTimeout = do
     actionRef <- I.newIORef onTimeout
-    stateRef <- I.newIORef Active
-    let h = Handle mgr actionRef stateRef
+    stateRef  <- I.newIORef Active
+    let h = Handle actionRef stateRef
     reaperAdd mgr h
     return h
 
@@ -116,7 +110,7 @@ registerKillThread m onTimeout = do
     register m $ onTimeout `E.finally` E.throwTo tid TimeoutThread
 
 data TimeoutThread = TimeoutThread
-    deriving (Typeable)
+    deriving Typeable
 instance E.Exception TimeoutThread where
     toException = E.asyncExceptionToException
     fromException = E.asyncExceptionFromException
@@ -128,28 +122,19 @@ instance Show TimeoutThread where
 -- | Setting the state to active.
 --   'Manager' turns active to inactive repeatedly.
 tickle :: Handle -> IO ()
-tickle (Handle _ _ stateRef) = I.writeIORef stateRef Active
+tickle (Handle _ stateRef) = I.writeIORef stateRef Active
 
--- | Removing the 'Handle' from the 'Manager' immediately.
+-- | Setting the state to canceled.
+--   'Manager' eventually removes this without timeout action.
 cancel :: Handle -> IO ()
-cancel (Handle mgr _ stateRef) = do
-    _ <- reaperModify mgr filt
-    return ()
-  where
-    -- It's very important that this function forces the whole workload so we
-    -- don't retain old handles, otherwise disasterous leaks occur.
-    filt [] = []
-    filt (h@(Handle _ _ stateRef') : hs)
-        | stateRef == stateRef' =
-            hs
-        | otherwise =
-            let !hs'= filt hs
-             in h : hs'
+cancel (Handle actionRef stateRef) = do
+    I.writeIORef actionRef (return ()) -- ensuring to release ThreadId
+    I.writeIORef stateRef Canceled
 
 -- | Setting the state to paused.
 --   'Manager' does not change the value.
 pause :: Handle -> IO ()
-pause (Handle _ _ stateRef) = I.writeIORef stateRef Paused
+pause (Handle _ stateRef) = I.writeIORef stateRef Paused
 
 -- | Setting the paused state to active.
 --   This is an alias to 'tickle'.
@@ -160,26 +145,18 @@ resume = tickle
 
 -- | Call the inner function with a timeout manager.
 --   'stopManager' is used after that.
-withManager
-    :: Int
-    -- ^ timeout in microseconds
-    -> (Manager -> IO a)
-    -> IO a
-withManager timeout f =
-    E.bracket
-        (initialize timeout)
-        stopManager
-        f
+withManager :: Int -- ^ timeout in microseconds
+            -> (Manager -> IO a)
+            -> IO a
+withManager timeout f = E.bracket (initialize timeout)
+                                  stopManager
+                                  f
 
 -- | Call the inner function with a timeout manager.
 --   'killManager' is used after that.
-withManager'
-    :: Int
-    -- ^ timeout in microseconds
-    -> (Manager -> IO a)
-    -> IO a
-withManager' timeout f =
-    E.bracket
-        (initialize timeout)
-        killManager
-        f
+withManager' :: Int -- ^ timeout in microseconds
+             -> (Manager -> IO a)
+             -> IO a
+withManager' timeout f = E.bracket (initialize timeout)
+                                   killManager
+                                   f

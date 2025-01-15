@@ -1,34 +1,31 @@
-module WaiAppStatic.Types (
-    -- * Pieces
-    Piece,
-    toPiece,
-    fromPiece,
-    unsafeToPiece,
-    Pieces,
-    toPieces,
+module WaiAppStatic.Types
+    ( -- * Pieces
+      Piece
+    , toPiece
+    , fromPiece
+    , unsafeToPiece
+    , Pieces
+    , toPieces
+      -- * Caching
+    , MaxAge (..)
+      -- * File\/folder serving
+    , FolderName
+    , Folder (..)
+    , File (..)
+    , LookupResult (..)
+    , Listing
+      -- * Settings
+    , StaticSettings (..)
+    ) where
 
-    -- * Caching
-    MaxAge (..),
-
-    -- * File\/folder serving
-    FolderName,
-    Folder (..),
-    File (..),
-    LookupResult (..),
-    Listing,
-
-    -- * Settings
-    StaticSettings (..),
-) where
-
-import Data.ByteString (ByteString)
-import Data.ByteString.Builder (Builder)
 import Data.Text (Text)
-import qualified Data.Text as T
 import qualified Network.HTTP.Types as H
-import Network.Mime (MimeType)
 import qualified Network.Wai as W
+import Data.ByteString (ByteString)
 import System.Posix.Types (EpochTime)
+import qualified Data.Text as T
+import Data.ByteString.Builder (Builder)
+import Network.Mime (MimeType)
 
 -- | An individual component of a path, or of a filepath.
 --
@@ -38,7 +35,7 @@ import System.Posix.Types (EpochTime)
 --
 -- Individual file lookup backends must know how to convert from a @Piece@ to
 -- their storage system.
-newtype Piece = Piece {fromPiece :: Text}
+newtype Piece = Piece { fromPiece :: Text }
     deriving (Show, Eq, Ord)
 
 -- | Smart constructor for a @Piece@. Won\'t allow unsafe components, such as
@@ -67,17 +64,10 @@ toPieces = mapM toPiece
 type Pieces = [Piece]
 
 -- | Values for the max-age component of the cache-control response header.
-data MaxAge
-    = -- | no cache-control set
-      NoMaxAge
-    | -- | set to the given number of seconds
-      MaxAgeSeconds Int
-    | -- | essentially infinite caching; in reality, probably one year
-      MaxAgeForever
-    | -- | set cache-control to no-store @since 3.1.8
-      NoStore
-    | -- | set cache-control to no-cache @since 3.1.9
-      NoCache
+data MaxAge = NoMaxAge -- ^ no cache-control set
+            | MaxAgeSeconds Int -- ^ set to the given number of seconds
+            | MaxAgeForever -- ^ essentially infinite caching; in reality, probably one year
+            | NoStore -- ^ set cache-control to no-store @since 3.1.8
 
 -- | Just the name of a folder.
 type FolderName = Piece
@@ -90,27 +80,26 @@ data Folder = Folder
 
 -- | Information on an individual file.
 data File = File
-    { fileGetSize :: Integer
-    -- ^ Size of file in bytes
+    { -- | Size of file in bytes
+      fileGetSize :: Integer
+      -- | How to construct a WAI response for this file. Some files are stored
+      -- on the filesystem and can use @ResponseFile@, while others are stored
+      -- in memory and should use @ResponseBuilder@.
     , fileToResponse :: H.Status -> H.ResponseHeaders -> W.Response
-    -- ^ How to construct a WAI response for this file. Some files are stored
-    -- on the filesystem and can use @ResponseFile@, while others are stored
-    -- in memory and should use @ResponseBuilder@.
+      -- | Last component of the filename.
     , fileName :: Piece
-    -- ^ Last component of the filename.
+      -- | Calculate a hash of the contents of this file, such as for etag.
     , fileGetHash :: IO (Maybe ByteString)
-    -- ^ Calculate a hash of the contents of this file, such as for etag.
+      -- | Last modified time, used for both display in listings and if-modified-since.
     , fileGetModified :: Maybe EpochTime
-    -- ^ Last modified time, used for both display in listings and if-modified-since.
     }
 
 -- | Result of looking up a file in some storage backend.
 --
 -- The lookup is either a file or folder, or does not exist.
-data LookupResult
-    = LRFile File
-    | LRFolder Folder
-    | LRNotFound
+data LookupResult = LRFile File
+                  | LRFolder Folder
+                  | LRNotFound
 
 -- | How to construct a directory listing page for the given request path and
 -- the resulting folder.
@@ -121,35 +110,45 @@ type Listing = Pieces -> Folder -> IO Builder
 -- Note that you should use the settings type approach for modifying values.
 -- See <http://www.yesodweb.com/book/settings-types> for more information.
 data StaticSettings = StaticSettings
-    { ssLookupFile :: Pieces -> IO LookupResult
-    -- ^ Lookup a single file or folder. This is how you can control storage
-    -- backend (filesystem, embedded, etc) and where to lookup.
+    {
+      -- | Lookup a single file or folder. This is how you can control storage
+      -- backend (filesystem, embedded, etc) and where to lookup.
+      ssLookupFile :: Pieces -> IO LookupResult
+
+      -- | Determine the mime type of the given file. Note that this function
+      -- lives in @IO@ in case you want to perform more complicated mimetype
+      -- analysis, such as via the @file@ utility.
     , ssGetMimeType :: File -> IO MimeType
-    -- ^ Determine the mime type of the given file. Note that this function
-    -- lives in @IO@ in case you want to perform more complicated mimetype
-    -- analysis, such as via the @file@ utility.
+
+      -- | Ordered list of filenames to be used for indices. If the user
+      -- requests a folder, and a file with the given name is found in that
+      -- folder, that file is served. This supercedes any directory listing.
     , ssIndices :: [Piece]
-    -- ^ Ordered list of filenames to be used for indices. If the user
-    -- requests a folder, and a file with the given name is found in that
-    -- folder, that file is served. This supercedes any directory listing.
+
+      -- | How to perform a directory listing. Optional. Will be used when the
+      -- user requested a folder.
     , ssListing :: Maybe Listing
-    -- ^ How to perform a directory listing. Optional. Will be used when the
-    -- user requested a folder.
+
+      -- | Value to provide for max age in the cache-control.
     , ssMaxAge :: MaxAge
-    -- ^ Value to provide for max age in the cache-control.
+
+      -- | Given a requested path and a new destination, construct a string
+      -- that will go there. Default implementation will use relative paths.
     , ssMkRedirect :: Pieces -> ByteString -> ByteString
-    -- ^ Given a requested path and a new destination, construct a string
-    -- that will go there. Default implementation will use relative paths.
+
+      -- | If @True@, send a redirect to the user when a folder is requested
+      -- and an index page should be displayed. When @False@, display the
+      -- content immediately.
     , ssRedirectToIndex :: Bool
-    -- ^ If @True@, send a redirect to the user when a folder is requested
-    -- and an index page should be displayed. When @False@, display the
-    -- content immediately.
+
+      -- | Prefer usage of etag caching to last-modified caching.
     , ssUseHash :: Bool
-    -- ^ Prefer usage of etag caching to last-modified caching.
+
+      -- | Force a trailing slash at the end of directories
     , ssAddTrailingSlash :: Bool
-    -- ^ Force a trailing slash at the end of directories
+
+      -- | Optional `W.Application` to be used in case of 404 errors
+      --
+      -- Since 3.1.3
     , ss404Handler :: Maybe W.Application
-    -- ^ Optional `W.Application` to be used in case of 404 errors
-    --
-    -- Since 3.1.3
     }

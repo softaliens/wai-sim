@@ -1,11 +1,10 @@
 {-# LANGUAGE CPP #-}
-
 -- | Some helpers functions.
-module Network.Wai.Util (
-    dropWhileEnd,
-    splitCommas,
-    trimWS,
-) where
+module Network.Wai.Util
+    ( dropWhileEnd
+    , splitCommas
+    , trimWS
+    ) where
 
 import qualified Data.ByteString as S
 import Data.Word8 (Word8, _comma, _space)

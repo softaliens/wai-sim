@@ -1,8 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
-
-module Network.Wai.Middleware.TimeoutSpec (
-    spec,
-) where
+module Network.Wai.Middleware.TimeoutSpec
+    ( spec
+    ) where
 
 import Control.Concurrent (threadDelay)
 import Network.HTTP.Types (status200, status503, status504)

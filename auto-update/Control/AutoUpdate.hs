@@ -1,5 +1,4 @@
 {-# LANGUAGE CPP #-}
-
 -- | In a multithreaded environment, running actions on a regularly scheduled
 -- background thread can dramatically improve performance.
 -- For example, web servers need to return the current time with each HTTP response.
@@ -30,53 +29,39 @@
 --
 -- For more examples, <http://www.yesodweb.com/blog/2014/08/announcing-auto-update see the blog post introducing this library>.
 module Control.AutoUpdate (
-    -- * Type
-    UpdateSettings,
-    defaultUpdateSettings,
-
-    -- * Accessors
-    updateAction,
-    updateFreq,
-    updateSpawnThreshold,
-
-    -- * Creation
-    mkAutoUpdate,
-    mkAutoUpdateWithModify,
-) where
+      -- * Type
+      UpdateSettings
+    , defaultUpdateSettings
+      -- * Accessors
+    , updateAction
+    , updateFreq
+    , updateSpawnThreshold
+      -- * Creation
+    , mkAutoUpdate
+    , mkAutoUpdateWithModify
+    ) where
 
 #if __GLASGOW_HASKELL__ < 709
 import           Control.Applicative     ((<*>))
 #endif
-import Control.Concurrent (forkIO, threadDelay)
-import Control.Concurrent.MVar (
-    newEmptyMVar,
-    putMVar,
-    readMVar,
-    takeMVar,
-    tryPutMVar,
- )
-import Control.Exception (
-    SomeException,
-    catch,
-    mask_,
-    throw,
-    try,
- )
-import Control.Monad (void)
-import Data.IORef (newIORef, readIORef, writeIORef)
-import Data.Maybe (fromMaybe)
-import GHC.Conc.Sync (labelThread)
+import           Control.Concurrent      (forkIO, threadDelay)
+import           Control.Concurrent.MVar (newEmptyMVar, putMVar, readMVar,
+                                          takeMVar, tryPutMVar)
+import           Control.Exception       (SomeException, catch, mask_, throw,
+                                          try)
+import           Control.Monad           (void)
+import           Data.IORef              (newIORef, readIORef, writeIORef)
+import           Data.Maybe              (fromMaybe)
 
 -- | Default value for creating an 'UpdateSettings'.
 --
 -- @since 0.1.0
 defaultUpdateSettings :: UpdateSettings ()
-defaultUpdateSettings =
-    UpdateSettings
-        { updateFreq = 1000000
-        , updateSpawnThreshold = 3
-        , updateAction = return ()
-        }
+defaultUpdateSettings = UpdateSettings
+    { updateFreq = 1000000
+    , updateSpawnThreshold = 3
+    , updateAction = return ()
+    }
 
 -- | Settings to control how values are updated.
 --
@@ -89,7 +74,7 @@ defaultUpdateSettings =
 --
 -- @since 0.1.0
 data UpdateSettings a = UpdateSettings
-    { updateFreq :: Int
+    { updateFreq           :: Int
     -- ^ Microseconds between update calls. Same considerations as
     -- 'threadDelay' apply.
     --
@@ -106,7 +91,7 @@ data UpdateSettings a = UpdateSettings
     -- Default: 3
     --
     -- @since 0.1.0
-    , updateAction :: IO a
+    , updateAction         :: IO a
     -- ^ Action to be performed to get the current value.
     --
     -- Default: does nothing.
@@ -152,16 +137,12 @@ mkAutoUpdateHelper us updateActionModify = do
     let fillRefOnExit f = do
             eres <- try f
             case eres of
-                Left e ->
-                    writeIORef currRef $
-                        error $
-                            "Control.AutoUpdate.mkAutoUpdate: worker thread exited with exception: "
-                                ++ show (e :: SomeException)
-                Right () ->
-                    writeIORef currRef $
-                        error $
-                            "Control.AutoUpdate.mkAutoUpdate: worker thread exited normally, "
-                                ++ "which should be impossible due to usage of infinite loop"
+                Left e -> writeIORef currRef $ error $
+                    "Control.AutoUpdate.mkAutoUpdate: worker thread exited with exception: "
+                    ++ show (e :: SomeException)
+                Right () -> writeIORef currRef $ error $
+                    "Control.AutoUpdate.mkAutoUpdate: worker thread exited normally, "
+                    ++ "which should be impossible due to usage of infinite loop"
 
     -- fork the worker thread immediately. Note that we mask async exceptions,
     -- but *not* in an uninterruptible manner. This will allow a
@@ -173,7 +154,7 @@ mkAutoUpdateHelper us updateActionModify = do
     -- Note that since we throw away the ThreadId of this new thread and never
     -- calls myThreadId, normal async exceptions can never be thrown to it,
     -- only RTS exceptions.
-    tid <- mask_ $ forkIO $ fillRefOnExit $ do
+    mask_ $ void $ forkIO $ fillRefOnExit $ do
         -- This infinite loop makes up out worker thread. It takes an a
         -- responseVar value where the next value should be putMVar'ed to for
         -- the benefit of any requesters currently blocked on it.
@@ -201,7 +182,7 @@ mkAutoUpdateHelper us updateActionModify = do
 
         -- Kick off the loop, with the initial responseVar0 variable.
         loop responseVar0 Nothing
-    labelThread tid "AutoUpdate"
+
     return $ do
         mval <- readIORef currRef
         case mval of
