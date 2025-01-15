@@ -1,0 +1,2 @@
+:set -itest -optP-include -optPdist/build/autogen/cabal_macros.h
+:set -XOverloadedStrings

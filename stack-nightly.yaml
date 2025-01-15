@@ -1,0 +1,31 @@
+resolver: nightly
+packages:
+  - ./auto-update
+  - ./mime-types
+  - ./recv
+  - ./time-manager
+  - ./wai
+  - ./wai-app-static
+  - ./wai-conduit
+  - ./wai-extra
+  - ./wai-frontend-monadcgi
+  - ./wai-http2-extra
+  - ./wai-websockets
+  - ./warp
+  - ./warp-quic
+  - ./warp-tls
+flags:
+  wai-extra:
+    build-example: true
+nix:
+  enable: false
+  packages:
+    - fcgi
+    - zlib
+extra-deps:
+  - cgi-3001.5.0.1
+  - http3-0.0.16
+  - multipart-0.2.1
+  - network-udp-0.0.0
+  - quic-0.2.1
+  - sockaddr-0.0.1
